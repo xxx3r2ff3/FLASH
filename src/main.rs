@@ -212,11 +212,53 @@ fn get_local_time_string() -> String {
     }
 }
 
+fn get_base_dir() -> std::path::PathBuf {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            return parent.to_path_buf();
+        }
+    }
+    std::path::PathBuf::from(".")
+}
+
+fn resolve_path(relative: &str, fallback_o: &str) -> std::path::PathBuf {
+    let base = get_base_dir();
+    let candidates = [
+        base.join(relative),
+        base.join("..").join(relative),
+        std::path::PathBuf::from(relative),
+    ];
+    for c in &candidates {
+        if c.exists() {
+            return c.clone();
+        }
+    }
+    let fb = std::path::PathBuf::from(fallback_o);
+    if fb.exists() {
+        return fb;
+    }
+    candidates[0].clone()
+}
+
+fn get_log_path() -> std::path::PathBuf {
+    let base = get_base_dir();
+    let p = base.join("telemetry.log");
+    if p.exists() {
+        return p;
+    }
+    let fallback = std::path::PathBuf::from("O:\\sing-box\\statu\\telemetry.log");
+    if fallback.exists() {
+        return fallback;
+    }
+    p
+}
+
 fn write_telemetry_log(line: &str) {
+    let log_path = get_log_path();
     if let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open("O:\\sing-box\\statu\\telemetry.log")
+        .open(log_path)
     {
         let _ = writeln!(file, "{}", line);
         let _ = file.flush();
@@ -658,7 +700,8 @@ fn menu_button_at(x: i32, base_w: i32, anim: f32) -> Option<usize> {
 }
 
 fn active_subscription_name() -> String {
-    if let Ok(data) = std::fs::read_to_string("O:\\sing-box\\subscriptions.json") {
+    let path = resolve_path("subscriptions.json", "O:\\sing-box\\subscriptions.json");
+    if let Ok(data) = std::fs::read_to_string(path) {
         if let Ok(cfg) = serde_json::from_str::<SubscriptionsConfig>(&data) {
             if !cfg.active.is_empty() {
                 return cfg.active;
@@ -669,7 +712,8 @@ fn active_subscription_name() -> String {
 }
 
 fn cycle_subscription() -> Option<String> {
-    let data = std::fs::read_to_string("O:\\sing-box\\subscriptions.json").ok()?;
+    let path = resolve_path("subscriptions.json", "O:\\sing-box\\subscriptions.json");
+    let data = std::fs::read_to_string(path).ok()?;
     let cfg: SubscriptionsConfig = serde_json::from_str(&data).ok()?;
     if cfg.subscriptions.is_empty() {
         return None;
@@ -678,9 +722,11 @@ fn cycle_subscription() -> Option<String> {
     let cur_idx = names.iter().position(|n| n == &cfg.active).unwrap_or(0);
     let next = names[(cur_idx + 1) % names.len()].clone();
     let target = next.clone();
+    let py_path = resolve_path("update_sub.py", "O:\\sing-box\\update_sub.py");
     std::thread::spawn(move || {
         let _ = std::process::Command::new("python")
-            .args(["O:\\sing-box\\update_sub.py", &target])
+            .arg(py_path)
+            .arg(&target)
             .creation_flags(CREATE_NO_WINDOW)
             .status();
     });
@@ -918,13 +964,22 @@ fn ensure_singbox_running() {
         }
     }
 
+    let bin = resolve_path("sing-box.exe", "O:\\sing-box\\sing-box.exe");
+    let cfg = resolve_path("config.json", "O:\\sing-box\\config.json");
+    let dir = bin.parent().unwrap_or(&bin);
+    let cmd = format!(
+        "Start-Process -FilePath '{}' -ArgumentList 'run -D \"{}\" -c \"{}\"' -Verb RunAs -WindowStyle Hidden",
+        bin.display(),
+        dir.display(),
+        cfg.display()
+    );
     let _ = std::process::Command::new("powershell")
         .args([
             "-NoProfile",
             "-WindowStyle",
             "Hidden",
             "-Command",
-            "Start-Process -FilePath 'O:\\sing-box\\sing-box.exe' -ArgumentList 'run -D O:\\sing-box -c O:\\sing-box\\config.json' -Verb RunAs -WindowStyle Hidden",
+            &cmd,
         ])
         .creation_flags(CREATE_NO_WINDOW)
         .spawn();
@@ -1286,9 +1341,10 @@ unsafe extern "system" fn wndproc_bar(
                         toggle_popup();
                     }
                     3 => {
-                        std::thread::spawn(|| {
+                        let log_path = get_log_path();
+                        std::thread::spawn(move || {
                             let _ = std::process::Command::new("notepad.exe")
-                                .arg("O:\\sing-box\\statu\\telemetry.log")
+                                .arg(log_path)
                                 .creation_flags(CREATE_NO_WINDOW)
                                 .spawn();
                         });
