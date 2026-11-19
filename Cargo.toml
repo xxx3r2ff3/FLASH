@@ -1,0 +1,23 @@
+[package]
+name = "FLASH"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "FLASH"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+    "Win32_System_LibraryLoader"
+] }
+
+[build-dependencies]
+winres = "0.1"

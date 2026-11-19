@@ -1,0 +1,7 @@
+/target/
+**/*.rs.bk
+*.log
+telemetry.log
+.aider*
+DOCS.md
+.aider.chat.history.md

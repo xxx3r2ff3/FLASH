@@ -1,0 +1,7 @@
+{
+  "active": "main",
+  "subscriptions": {
+    "main": "https://example.com/api/v1/client/subscribe?token=YOUR_TOKEN_HERE",
+    "backup": "https://example.com/sub?token=BACKUP_TOKEN_HERE"
+  }
+}
